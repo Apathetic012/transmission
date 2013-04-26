@@ -1,0 +1,22 @@
+{
+    "name": "apathetic/transmission",
+    "description": "a PHP lib for the Transmission RPC Interface.",
+    "license": "BSD-2-Clause",
+    "authors": [
+        {
+            "name": "Cyrus David",
+            "email": "david@jcyr.us"
+        }
+    ],
+    "require": {
+        "php": ">=5.3.0",
+        "illuminate/support": "4.0.x",
+        "guzzle/guzzle": "~3.4"
+    },
+    "autoload": {
+        "psr-0": {
+            "Transmission": "src/"
+        }
+    },
+    "minimum-stability": "dev"
+}

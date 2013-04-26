@@ -30,6 +30,7 @@ $transmission = new Transmission($config);
 
 - Add `Transmission\TransmissionServiceProvider` to your service providers.
 - Add an alias to `Transmission`
+- Define your configuration by creating a file `config/transmission.php`
 
 ```php
 // config/app.php

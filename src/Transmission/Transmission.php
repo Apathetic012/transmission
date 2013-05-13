@@ -65,22 +65,81 @@ class Transmission {
 
   /**
    * Add a torrent
-   * @param string $url Torrent / Magnet URL
+   * @param string $url     Torrent / Magnet URL
+   * @param array  $options additional options
    */
-  public function add($url) {
-    return $this->callServer('torrent-add', array('filename' => $url));
+  public function add($url, array $options) {
+    $response = $this->callServer('torrent-add', array('filename' => $url) + $options);
+
+    return $response->{'torrent-added'};
   }
 
   /**
    * Get torrent info
-   * @param  string|array $id Torrent id(s)
+   * @param  int|array $id Torrent id(s)
    * @return array
    */
   public function get($ids, $fields = array()) {
     $ids = (array) $ids;
     $fields = empty($fields) ? static::$fields : $fields;
 
-    return $this->callServer('torrent-get', array('ids' => $ids, 'fields' => $fields));
+    $response = $this->callServer('torrent-get', array(
+      'ids'    => $ids,
+      'fields' => $fields
+    ));
+
+    return $response->torrents;
+  }
+
+  /**
+   * Get torrent info for a single torrent
+   * @param  int    $id     Torrent id
+   * @param  array  $fields
+   * @return obj|bool       returns false if torrent ID is inexistent
+   */
+  public function only($id, $fields = array()) {
+    $get = $this->get($id, $fields);
+
+    return reset($get);
+  }
+
+  /**
+   * Remove torrent and optionally it's data
+   * @param  int|array  $ids     The torrent id(s)
+   * @param  boolean $deleteData Delete the data as well
+   * @return boolean
+   */
+  public function delete($ids, $deleteData = false) {
+    $ids = (array) $ids;
+
+    $this->callServer('torrent-remove', array(
+      'ids'               => $ids,
+      'delete-local-data' => $deleteData
+    ));
+
+    return true;
+  }
+
+  /**
+   * Get session variables
+   * @param  array|string  $keys
+   * @return array|string
+   */
+  public function getSession($keys = array()) {
+    $response = $this->callServer('session-get');
+
+    if (is_array($keys)) {
+      if (empty($keys)) return $response;
+
+      $vars = new \stdClass;
+      foreach ($keys as $key) {
+        $vars->{$key} = isset($response->{$key}) ? $response->{$key} : null;
+      }
+
+      return $vars;
+    }
+
+    return (isset($response->{$keys}) ? $response->{$keys} : null);
   }
 
   protected function getSessionId() {
@@ -94,6 +153,7 @@ class Transmission {
       $this->response = $request->send();
     } catch (BadResponseException $e) {
       $this->response = $e->getResponse();
+
       if ($this->response->getStatusCode() == 409) {
         $this->sessionId = (string) $this->response->getHeader(static::$csrfKey);
         if ( ! $this->sessionId) {
@@ -103,6 +163,10 @@ class Transmission {
         return $this->sessionId;
       }
 
+      if ($this->response->getStatusCode() == 401) {
+        throw new TransmissionException('Invalid username/password.');
+      }
+
       // unrecognized status code
       throw $e;
     }
@@ -110,7 +174,7 @@ class Transmission {
     return $this->sessionId;
   }
 
-  protected function callServer($command, $options) {
+  protected function callServer($command, $options = array()) {
 
     if ( ! $this->sessionId) {
       $this->getSessionId();
@@ -130,18 +194,19 @@ class Transmission {
       $request->setAuth($this->username, $this->password);
     }
 
-    // won't catch the exceptions
-    $response = $request->send();
+    $jsonResponse = $request->send();
+    $response = json_decode($jsonResponse->getBody(true));
 
-    $jsonResponse = json_decode($response->getBody(true));
-
-    switch ($command) {
-
-      case 'torrent-add': return $jsonResponse->arguments->{'torrent-added'};
-      case 'torrent-get': return $jsonResponse->arguments->torrents;
+    if ($response->result == 'duplicate torrent') {
+      throw new DuplicateTorrentException;
     }
+
+    // assume $response->result == 'success'
+
+    return $response->arguments;
   }
 
 }
 
 class TransmissionException extends \Exception {}
+class DuplicateTorrentException extends \Exception {}
